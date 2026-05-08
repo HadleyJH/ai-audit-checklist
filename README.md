@@ -1,10 +1,16 @@
 # ai-audit-checklist
-README.md
-package.json
-.gitignore
-index.html
-src/
-  main.js
-  checklistData.js
-  scoring.js
-  styles.css
+repo/
+│
+├── frontend/
+│   ├── src/
+│   ├── package.json
+│   └── vite.config.js
+│
+├── backend/
+│   ├── requirements.txt
+│   ├── main.py
+│   ├── scoring.py
+│   ├── prompts.py
+│   └── .env
+│
+└── README.md
