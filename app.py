@@ -1,7 +1,9 @@
 import json
 import re
+from io import BytesIO
 from urllib.parse import urlparse
 
+import pandas as pd
 import requests
 import streamlit as st
 from bs4 import BeautifulSoup
@@ -336,7 +338,89 @@ Return valid JSON only, with this structure:
         st.stop()
 
 
-def display_results(results):
+def create_excel_export(results, signals):
+    output = BytesIO()
+
+    summary_df = pd.DataFrame([
+        {
+            "URL": signals.get("url", ""),
+            "Total Weighted Score": results.get("total_weighted_score", 0),
+            "Max Possible Score": results.get("max_possible_score", 0),
+            "AI Readiness %": results.get("readiness_percentage", 0),
+            "Maturity Level": results.get("maturity_level", ""),
+            "Executive Summary": results.get("executive_summary", ""),
+            "Top Priorities": "\n".join(results.get("top_priorities", [])),
+        }
+    ])
+
+    audit_df = pd.DataFrame(results.get("audit", []))
+
+    signals_df = pd.DataFrame([
+        {
+            "URL": signals.get("url", ""),
+            "Status Code": signals.get("status_code", ""),
+            "TTFB Seconds": signals.get("ttfb_seconds", ""),
+            "Title": signals.get("title", ""),
+            "Title Length": signals.get("title_length", ""),
+            "Meta Description": signals.get("meta_description", ""),
+            "Meta Description Length": signals.get("meta_description_length", ""),
+            "Canonical": signals.get("canonical", ""),
+            "H1 Count": signals.get("h1_count", ""),
+            "Schema Types": ", ".join(signals.get("schema_types", [])),
+            "JSON-LD Count": signals.get("json_ld_count", ""),
+            "Word Count": signals.get("word_count", ""),
+            "Internal Link Count": signals.get("internal_link_count", ""),
+            "External Link Count": signals.get("external_link_count", ""),
+            "Image Count": signals.get("image_count", ""),
+            "Images Missing Alt Count": signals.get("images_missing_alt_count", ""),
+            "FAQ-like Questions": "\n".join(signals.get("faq_like_questions", [])),
+            "Visible Trust Terms": ", ".join(signals.get("visible_trust_terms", [])),
+        }
+    ])
+
+    headings_data = []
+    for heading_level, headings in signals.get("headings", {}).items():
+        for heading in headings:
+            headings_data.append({
+                "Heading Level": heading_level.upper(),
+                "Heading Text": heading
+            })
+
+    headings_df = pd.DataFrame(headings_data)
+
+    internal_links_df = pd.DataFrame(signals.get("sample_internal_links", []))
+
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        summary_df.to_excel(writer, index=False, sheet_name="Summary")
+        audit_df.to_excel(writer, index=False, sheet_name="Detailed Audit")
+        signals_df.to_excel(writer, index=False, sheet_name="Page Signals")
+        headings_df.to_excel(writer, index=False, sheet_name="Headings")
+        internal_links_df.to_excel(writer, index=False, sheet_name="Internal Links")
+
+        workbook = writer.book
+
+        for sheet_name in writer.sheets:
+            worksheet = writer.sheets[sheet_name]
+            worksheet.freeze_panes = "A2"
+
+            for column_cells in worksheet.columns:
+                max_length = 0
+                column_letter = column_cells[0].column_letter
+
+                for cell in column_cells:
+                    try:
+                        cell_value = str(cell.value) if cell.value is not None else ""
+                        max_length = max(max_length, len(cell_value))
+                    except Exception:
+                        pass
+
+                adjusted_width = min(max_length + 2, 60)
+                worksheet.column_dimensions[column_letter].width = adjusted_width
+
+    return output.getvalue()
+
+
+def display_results(results, signals):
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -372,6 +456,17 @@ def display_results(results):
             st.write(f'**Weighted score:** {row.get("weighted_score", "")}')
             st.write(f'**Evidence:** {row.get("evidence", "")}')
             st.write(f'**Recommendation:** {row.get("recommendation", "")}')
+
+    st.subheader("Export Audit")
+
+    excel_file = create_excel_export(results, signals)
+
+    st.download_button(
+        label="Download Excel Audit",
+        data=excel_file,
+        file_name="ai_optimisation_audit.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 st.title("AI Optimisation Audit Checklist")
@@ -413,4 +508,4 @@ if run_button:
         client = get_openai_client()
         results = run_ai_audit(client, signals, CHECKLIST)
 
-    display_results(results)
+    display_results(results, signals)
