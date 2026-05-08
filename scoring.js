@@ -1,15 +1,22 @@
-export function calculateScore(categories) {
-  let total = 0;
+export function calculateWeightedScore(score, weighting) {
+  return Number(score) * Number(weighting);
+}
 
-  categories.forEach(category => {
-    let categoryScore = 0;
+export function calculateTotalScore(items) {
+  return items.reduce((total, item) => {
+    return total + calculateWeightedScore(item.score, item.weighting);
+  }, 0);
+}
 
-    category.questions.forEach(question => {
-      categoryScore += question.score;
-    });
+export function calculateMaxScore(items) {
+  return items.reduce((total, item) => {
+    return total + (5 * Number(item.weighting));
+  }, 0);
+}
 
-    total += categoryScore * (category.weight / 100);
-  });
+export function calculateReadinessPercentage(items) {
+  const total = calculateTotalScore(items);
+  const max = calculateMaxScore(items);
 
-  return total;
+  return max === 0 ? 0 : Math.round((total / max) * 100);
 }
